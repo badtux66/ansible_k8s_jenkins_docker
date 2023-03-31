@@ -1,0 +1,42 @@
+---
+- name: Configure ansible server
+  hosts: all
+  become: true
+  gather_facts: true
+
+  handlers:
+    - name: restart_sshd
+      service:
+        name: sshd
+        state: restarted
+
+  tasks:
+    - name: Install packages
+      package:
+       name:
+          - bash-completion
+          - vim
+          - nano
+       state: latest
+
+    - name: Create erkut user
+      user:
+        name: erkut
+        state: present
+        password: "{{ 'erkut+2023' | password_hash('sha512') }}"
+        update_password: on_create
+        shell: /bin/bash
+
+    - name: Edit SSHD Config
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PasswordAuthentication '
+        insertafter: '#PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+      notify: restart_sshd
+
+    - name: Add sudo rights for erkut
+      copy:
+        dest: /etc/sudoers.d/erkut
+        content: "erkut ALL=(root) NOPASSWD: ALL"
+        backup: true
