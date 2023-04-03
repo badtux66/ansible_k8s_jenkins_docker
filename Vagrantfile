@@ -1,60 +1,65 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
 require 'socket'
 require 'timeout'
 
-def get_network_interface
-  default_route_line = `ip route | grep "default via"`
-  raise "Could not find default route. Make sure you have a default route configured and try again." if default_route_line.nil?
-  default_route_interface = default_route_line.split("dev ")[1].split(":")[0].strip
-  default_route_interface
+$network_interface = `sudo iw dev | awk '$1=="Interface"{print $2}'`.strip
+$subnet = `ip -4 addr show $network_interface | awk '/inet 192.168./{split($2,a,"."); print a[3]}'`.strip
+
+def get_available_ip(base_ip, subnet)
+  ip_parts = base_ip.split(".")
+  ip_parts[2] = subnet
+  (1..254).each do |octet|
+    ip_parts[3] = octet.to_s
+    candidate_ip = ip_parts.join(".")
+    begin
+      timeout(1) { TCPSocket.new(candidate_ip, 22) }
+    rescue Errno::ETIMEDOUT, Errno::ECONNREFUSED, Timeout::Error, Errno::EHOSTUNREACH
+      return candidate_ip
+    end
+  end
+  raise "No available IP addresses in the subnet"
 end
 
-$network_interface = get_network_interface
-
 Vagrant.configure("2") do |config|
-  config.vm.box = "centos/7"
+  config.vm.provider "vmware_desktop" do |v|
+    v.vmx["numvcpus"] = "2"
+    v.vmx["memsize"] = "2048"
+  end
 
-  # Configuration Management VM
   config.vm.define "ansible" do |ansible|
-    ansible.vm.hostname = "ansible"
-    ansible.vm.network "public_network", bridge: $network_interface, auto_config: true
-    ansible.vm.provider "vmware_desktop" do |v|
-      v.name = "ansible"
-      v.memory = 1024
-      v.cpus = 1
-    end
-    ansible.vm.provision "ansible" do |ansible|
-      ansible.limit = "all"
-      ansible.playbook = "/home/badtux/Desktop/ansible_k8s_jenkins_docker/ansible/ansible.yml"
+    ansible.vm.box = "generic/ubuntu2004"
+    ansible.vm.hostname = "config-server"
+    ansible_ip = get_available_ip("192.168.#{$subnet}.2", $subnet)
+    ansible.vm.network "public_network", bridge: $network_interface, ip: ansible_ip, netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
+    ansible.vm.synced_folder ".", "/vagrant", type: "rsync"
+    ansible.vm.provision "ansible_local" do |ansible|
+      ansible.playbook = "ansible/ansible.yml"
     end
   end
 
-  # CI/CD VM
   config.vm.define "jenkins" do |jenkins|
+    jenkins.vm.box = "generic/ubuntu2004"
     jenkins.vm.hostname = "jenkins"
-    jenkins.vm.network "public_network", bridge: $network_interface, auto_config: true
-    jenkins.vm.provider "vmware_desktop" do |v|
-      v.name = "jenkins"
-      v.memory = 2048
-      v.cpus = 2
-    end
-    jenkins.vm.provision "ansible" do |ansible|
-      ansible.limit = "all"
-      ansible.playbook = "/home/badtux/Desktop/ansible_k8s_jenkins_docker/jenkins/jenkins.yml"
+    $subnet = $subnet.to_i + 1
+    jenkins_ip = get_available_ip("192.168.#{$subnet}.3", $subnet)
+    jenkins.vm.network "public_network", bridge: $network_interface, ip: jenkins_ip, netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
+    jenkins.vm.synced_folder ".", "/vagrant", type: "rsync"
+    jenkins.vm.provision "ansible_local" do |ansible|
+      ansible.playbook = "jenkins/jenkins.yml"
     end
   end
 
-  # Kubernetes VM
   config.vm.define "k8s" do |k8s|
+    k8s.vm.box = "generic/ubuntu2004"
     k8s.vm.hostname = "k8s"
-    k8s.vm.network "public_network", bridge: $network_interface, auto_config: true
-    k8s.vm.provider "vmware_desktop" do |v|
-      v.name = "k8s"
-      v.memory = 2048
-      v.cpus = 2
-    end
-    k8s.vm.provision "ansible" do |ansible|
-      ansible.limit = "all"
-      ansible.playbook = "/home/badtux/Desktop/ansible_k8s_jenkins_docker/k8s/k8s.yml"
+    $subnet = $subnet.to_i + 1
+    k8s_ip = get_available_ip("192.168.#{$subnet}.4", $subnet)
+    k8s.vm.network "public_network", bridge: $network_interface, ip: k8s_ip, netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
+    k8s.vm.synced_folder ".", "/vagrant", type: "rsync"
+    k8s.vm.provision "ansible_local" do |ansible|
+      ansible.playbook = "k8s/k8s.yml"
     end
   end
 end
