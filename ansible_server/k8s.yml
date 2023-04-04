@@ -1,0 +1,39 @@
+---
+- name: Install and configure K8s
+  hosts: k8s
+  become: true
+  tasks:
+    - name: Install K8s dependencies
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg-agent
+          - software-properties-common
+        state: present
+        update_cache: true
+
+    - name: Add K8s GPG key
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: Add K8s repository
+      apt_repository:
+        repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+        state: present
+
+    - name: Install K8s components
+      apt:
+        name:
+          - kubeadm
+          - kubelet
+          - kubectl
+        state: present
+        update_cache: true
+
+    - name: Enable and start K8s services
+      systemd:
+        name: "{{ item }}"
+       

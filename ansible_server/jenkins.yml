@@ -1,0 +1,33 @@
+---
+- name: Install and configure Jenkins and Docker
+  hosts: jenkins
+  become: true
+  tasks:
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+        update_cache: true
+
+    - name: Start Jenkins service
+      systemd:
+        name: jenkins
+        state: started
+        enabled: true
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: Add Jenkins user to Docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+
+    - name: Restart Jenkins service
+      systemd:
+        name: jenkins
+        state: restarted
