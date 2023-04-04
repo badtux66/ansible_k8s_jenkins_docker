@@ -12,6 +12,13 @@ Vagrant.configure("2") do |config|
     ansible.vm.hostname = "config-server"
     ansible.vm.network "public_network", bridge: $network_interface, ip: "192.168.245.2", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
     ansible.vm.synced_folder ".", "/vagrant", type: "rsync"
+    ansible.vm.provision "shell", inline: <<-SHELL
+      sudo apt update
+      sudo apt install software-properties-common
+      sudo apt-add-repository ppa:ansible/ansible
+      sudo apt update
+      sudo apt install ansible
+    SHELL
     ansible.vm.provision "ansible_local" do |ansible|
       ansible.playbook = "Ansible/ansible/ansible.yml"
     end
