@@ -20,7 +20,7 @@ Vagrant.configure("2") do |config|
       sudo apt install ansible
     SHELL
     ansible.vm.provision "ansible_local" do |ansible|
-      ansible.playbook = "Ansible/ansible/ansible.yml"
+      ansible.playbook = "/home/badtux/Desktop/ansible_k8s_jenkins_docker/Ansible/ansible/ansible.yml"
     end
   end
 
@@ -30,7 +30,7 @@ Vagrant.configure("2") do |config|
     jenkins.vm.network "public_network", bridge: $network_interface, ip: "192.168.245.3", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
     jenkins.vm.synced_folder ".", "/vagrant", type: "rsync"
     jenkins.vm.provision "ansible_local" do |ansible|
-      ansible.playbook = "Ansible/jenkins/jenkins.yml"
+      ansible.playbook = "/home/badtux/Desktop/ansible_k8s_jenkins_docker/Ansible/jenkins/jenkins.yml"
     end
   end
 
@@ -40,7 +40,7 @@ Vagrant.configure("2") do |config|
     k8s.vm.network "public_network", bridge: $network_interface, ip: "192.168.245.4", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
     k8s.vm.synced_folder ".", "/vagrant", type: "rsync"
     k8s.vm.provision "ansible_local" do |ansible|
-      ansible.playbook = "Ansible/k8s/k8s.yml"
+      ansible.playbook = "/home/badtux/Desktop/ansible_k8s_jenkins_docker/Ansible/k8s/k8s.yml"
     end
   end
 end
