@@ -1,0 +1,17 @@
+---
+- name: Install and configure Ansible
+  hosts: ansible
+  become: true
+  tasks:
+    - name: Install Ansible dependencies
+      apt:
+        name:
+          - software-properties-common
+          - python3-pip
+        state: present
+        update_cache: true
+
+    - name: Install Ansible
+      pip:
+        name: ansible
+        state: present
