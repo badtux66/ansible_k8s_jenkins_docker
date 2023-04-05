@@ -9,7 +9,7 @@ Vagrant.configure("2") do |config|
     ansible.vm.box = "generic/ubuntu2004"
     ansible.vm.hostname = "config-server"
     ansible.vm.network "public_network", bridge: $network_interface, ip: "192.168.245.2", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
-    ansible.vm.synced_folder ".", "/vagrant", type: "rsync", rsync__exclude: ".git/"
+    ansible.vm.synced_folder "/home/badtux/Desktop/ansible_k8s_jenkins_docker", "/vagrant", type: "rsync", rsync__exclude: ".git/"
 
     ansible.vm.provision "shell", inline: <<-SHELL
       sudo apt update
@@ -30,7 +30,7 @@ Vagrant.configure("2") do |config|
     jenkins.vm.box = "generic/ubuntu2004"
     jenkins.vm.hostname = "jenkins"
     jenkins.vm.network "public_network", bridge: $network_interface, ip: "192.168.245.3", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
-    jenkins.vm.synced_folder ".", "/vagrant", type: "rsync", rsync__exclude: ".git/"
+    jenkins.vm.synced_folder "/home/badtux/Desktop/ansible_k8s_jenkins_docker", "/vagrant", type: "rsync", rsync__exclude: ".git/"
 
     jenkins.vm.provision "shell", inline: <<-SHELL
       sudo apt update
@@ -48,7 +48,7 @@ Vagrant.configure("2") do |config|
     k8s.vm.box = "generic/ubuntu2004"
     k8s.vm.hostname = "k8s"
     k8s.vm.network "public_network", bridge: $network_interface, ip: "192.168.245.5", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
-    k8s.vm.synced_folder ".", "/vagrant", type: "rsync", rsync__exclude: ".git/"
+    k8s.vm.synced_folder "/home/badtux/Desktop/ansible_k8s_jenkins_docker", "/vagrant", type: "rsync", rsync__exclude: ".git/"
 
     k8s.vm.provision "shell", inline: <<-SHELL
       sudo apt update
