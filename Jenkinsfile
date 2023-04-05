@@ -1,59 +1,65 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    DOCKER_REGISTRY = "your-dockerhub-username"
-    DOCKER_IMAGE = "myapp"
-    DOCKER_TAG = "${env.BUILD_NUMBER}"
-    K8S_NAMESPACE = "default"
-    K8S_DEPLOYMENT = "myapp"
-    K8S_CONTAINER = "myapp"
-  }
-
-  stages {
-    stage('Build') {
-      steps {
-        sh "docker build -t ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} ."
-      }
+    environment {
+        DOCKERHUB_CREDENTIALS = '832b05f4-e5c3-406f-ae25-0591bf529adb'
+        DOCKERHUB_REPO = 'edipoz/todo-app'
     }
 
-    stage('Push') {
-      steps {
-        sh "docker login -u ${DOCKER_REGISTRY} -p your-dockerhub-password"
-        sh "docker push ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-      }
-    }
-
-    stage('Deploy') {
-      steps {
-        kubernetesDeploy(
-          kubeconfigId: 'kubeconfig',
-          configs: 'k8s/deployment.yml',
-          enableConfigSubstitution: true,
-          namespace: "${K8S_NAMESPACE}"
-        )
-      }
-    }
-
-    stage('Expose') {
-      steps {
-        kubernetesDeploy(
-          kubeconfigId: 'kubeconfig',
-          configs: 'k8s/service.yml',
-          enableConfigSubstitution: true,
-          namespace: "${K8S_NAMESPACE}"
-        )
-      }
-    }
-
-    stage('URL') {
-      steps {
-        script {
-          def nodePort = sh(returnStdout: true, script: "kubectl get svc/${K8S_DEPLOYMENT} -n ${K8S_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}'").trim()
-          def nodeIP = sh(returnStdout: true, script: "kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type==\"ExternalIP\")].address}'").trim()
-          echo "URL: http://${nodeIP}:${nodePort}"
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/badtux66/todo.git'
+            }
         }
-      }
+
+        stage('Build') {
+            steps {
+                script {
+                    def mvnHome = tool 'Maven'
+                    sh "${mvnHome}/bin/mvn clean package"
+                }
+            }
+        }
+
+        stage('Docker build and push') {
+            steps {
+                script {
+                    docker.withRegistry('https://registry.hub.docker.com', DOCKERHUB_CREDENTIALS) {
+                        def app = docker.build("${DOCKERHUB_REPO}:${env.BUILD_NUMBER}")
+                        app.push()
+                    }
+                }
+            }
+        }
+
+        stage('Kubernetes Deploy') {
+            steps {
+                script {
+                    kubernetesDeploy(
+                        configs: 'k8s-deployment.yaml',
+                        kubeconfigId: '7d9d96c4-efbb-4056-aeb2-a8a20748d025',
+                        enableConfigSubstitution: true
+                    )
+                }
+            }
+        }
+
+        stage('Expose application') {
+            steps {
+                script {
+                    sh "kubectl expose deployment todo-deployment --type=LoadBalancer --name=todo-service"
+                }
+            }
+        }
+
+        stage('Get application URL') {
+            steps {
+                script {
+                    def appUrl = sh(script: "kubectl get svc todo-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}'", returnStdout: true).trim()
+                    echo "Application is running at: http://${appUrl}:8080"
+                }
+            }
+        }
     }
-  }
 }
