@@ -1,0 +1,102 @@
+---
+- name: Install Kubernetes on Ubuntu 20.04
+  hosts: k8s
+  become: yes
+  become_user: root
+  become_method: sudo
+  gather_facts: yes
+  vars:
+    ansible_become_pass: erkut+2023
+  tasks:
+    - name: Update APT package index
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Install APT packages
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+        state: present
+
+    - name: Add Kubernetes GPG key
+      ansible.builtin.apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: Add Kubernetes APT repository
+      ansible.builtin.apt_repository:
+        repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+        state: present
+
+    - name: Install Kubernetes components
+      ansible.builtin.apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+    
+    - name: Add Kubernetes cgroup driver configuration to kubelet
+      ansible.builtin.copy:
+        dest: /etc/default/kubelet
+        content: 'KUBELET_EXTRA_ARGS=--cgroup-driver=cgroupfs'
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Enable and start kubelet service
+      ansible.builtin.systemd:
+        name: kubelet
+        enabled: yes
+        state: started
+
+- name: Set up Kubernetes master
+  hosts: masters
+  become: yes
+
+  tasks:
+    - name: Initialize Kubernetes master
+      ansible.builtin.command: kubeadm init --pod-network-cidr=10.244.0.0/16
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Set up kubeconfig for the current user
+      become: no
+      block:
+        - name: Create .kube directory
+          ansible.builtin.file:
+            path: $HOME/.kube
+            state: directory
+
+        - name: Copy admin.conf to user's kubeconfig
+          ansible.builtin.command: "sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config && sudo chown $(id -u):$(id -g) $HOME/.kube/config"
+          args:
+            creates: $HOME/.kube/config
+
+    - name: Install Calico
+      become: no
+      ansible.builtin.command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+      args:
+        warn: no
+
+    - name: Get join command
+      become: yes
+      ansible.builtin.command: kubeadm token create --print-join-command
+      register: join_command
+      delegate_to: "{{ groups['masters'][0] }}"
+      run_once: yes
+
+- name: Set up Kubernetes worker nodes
+  hosts: workers
+  become: yes
+
+  tasks:
+
+    - name: Join Kubernetes cluster
+      ansible.builtin.command: "{{ hostvars[groups['masters'][0]]['join_command']['stdout'] }}"
+      args:
+        warn: no
+        creates: /etc/kubernetes/kubelet.conf
+  

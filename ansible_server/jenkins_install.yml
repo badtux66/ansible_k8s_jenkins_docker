@@ -1,0 +1,78 @@
+---
+- name: Install Jenkins and Docker 
+  hosts: jenkins
+  become: yes
+  become_user: root
+  become_method: sudo
+  gather_facts: yes
+  vars:
+    ansible_become_pass: erkut+2023
+  tasks:
+  - name: Update APT package index
+    ansible.builtin.apt:
+      update_cache: yes
+
+  - name: Install APT packages
+    ansible.builtin.apt:
+      name:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg-agent
+        - software-properties-common
+      state: present
+  
+  - name: Add Docker GPG key
+    ansible.builtin.apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+
+  - name: Add Docker APT repository
+    ansible.builtin.apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+      state: present
+
+  - name: Install Docker CE
+    ansible.builtin.apt:
+      name:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+      state: present
+
+  - name: Install OpenJDK 11
+    ansible.builtin.apt:
+      name: openjdk-11-jdk
+      state: present
+ 
+  - name: update
+    apt:
+      name: '*'
+      state: latest    
+
+  - name: Add Jenkins GPG key
+    ansible.builtin.apt_key:
+      url: https://pkg.jenkins.io/debian/jenkins.io.key
+      state: present
+
+  - name: Add Jenkins APT repository
+    ansible.builtin.apt_repository:
+      repo: deb https://pkg.jenkins.io/debian binary/
+      state: present
+
+  - name: Install Jenkins
+    ansible.builtin.apt:
+      name: jenkins
+      state: present
+
+  - name: Enable and start Docker service
+    ansible.builtin.systemd:
+      name: docker
+      enabled: yes
+      state: started
+
+  - name: Enable and start Jenkins service
+    ansible.builtin.systemd:
+      name: jenkins
+      enabled: yes
+      state: started
