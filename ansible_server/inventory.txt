@@ -1,0 +1,12 @@
+ansible ansible_ssh_host=192.168.245.2 ansible_ssh_user=erkut ansible_ssh_pass=erkut+2023
+jenkins ansible_ssh_host=192.168.245.3 ansible_ssh_user=erkut ansible_ssh_pass=erkut+2023
+k8s ansible_ssh_host=192.168.245.5 ansible_ssh_user=erkut ansible_ssh_pass=erkut+2023
+
+[Contorol_Nodes]
+ansible
+
+[CI/CD_Nodes]
+jenkins
+
+[K8s_Nodes]
+k8s
