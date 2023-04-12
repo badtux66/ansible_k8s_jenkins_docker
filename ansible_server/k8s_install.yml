@@ -1,5 +1,5 @@
 ---
-- name: Install Kubernetes on Ubuntu 20.04
+- name: Setup Kubernetes
   hosts: k8s
   become: yes
   become_user: root
@@ -8,95 +8,111 @@
   vars:
     ansible_become_pass: erkut+2023
   tasks:
-    - name: Update APT package index
-      ansible.builtin.apt:
-        update_cache: yes
-
-    - name: Install APT packages
-      ansible.builtin.apt:
+    - name: Install required packages
+      apt:
         name:
           - apt-transport-https
           - ca-certificates
           - curl
+          - gnupg
         state: present
 
-    - name: Add Kubernetes GPG key
-      ansible.builtin.apt_key:
+    - name: Add Docker repository signing key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker and containerd
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    - name: Copy daemon.json for Docker
+      copy:
+        src: daemon.json
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Restart Docker
+      systemd:
+        name: docker
+        state: restarted
+        daemon_reload: yes
+
+    - name: Disable swap
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+
+    - name: Comment out swap partition from fstab
+      replace:
+        path: /etc/fstab
+        regexp: '^(.+swap.+)swap(.+)$'
+        replace: '#\1swap\2'
+        backup: yes
+
+    - name: Add Kubernetes repository signing key
+      apt_key:
         url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
         state: present
 
-    - name: Add Kubernetes APT repository
-      ansible.builtin.apt_repository:
-        repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    - name: Add Kubernetes repository
+      apt_repository:
+        repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
         state: present
 
     - name: Install Kubernetes components
-      ansible.builtin.apt:
+      apt:
         name:
           - kubelet
           - kubeadm
           - kubectl
         state: present
-    
-    - name: Add Kubernetes cgroup driver configuration to kubelet
-      ansible.builtin.copy:
-        dest: /etc/default/kubelet
-        content: 'KUBELET_EXTRA_ARGS=--cgroup-driver=cgroupfs'
-        owner: root
-        group: root
-        mode: 0644
+        update_cache: yes
 
-    - name: Enable and start kubelet service
-      ansible.builtin.systemd:
-        name: kubelet
-        enabled: yes
-        state: started
+    - name: Hold Kubernetes components at their current version
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
 
-- name: Set up Kubernetes master
-  hosts: masters
-  become: yes
-
-  tasks:
-    - name: Initialize Kubernetes master
-      ansible.builtin.command: kubeadm init --pod-network-cidr=10.244.0.0/16
+    - name: Initialize Kubernetes cluster (ignore pre-flight errors)
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=all
       args:
         creates: /etc/kubernetes/admin.conf
 
-    - name: Set up kubeconfig for the current user
-      become: no
-      block:
-        - name: Create .kube directory
-          ansible.builtin.file:
-            path: $HOME/.kube
-            state: directory
+    - name: Create .kube directory for vagrant user
+      file:
+        path: /home/vagrant/.kube
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: 0755
 
-        - name: Copy admin.conf to user's kubeconfig
-          ansible.builtin.command: "sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config && sudo chown $(id -u):$(id -g) $HOME/.kube/config"
-          args:
-            creates: $HOME/.kube/config
-
-    - name: Install Calico
-      become: no
-      ansible.builtin.command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
-      args:
-        warn: no
-
-    - name: Get join command
+    - name: Copy Kubernetes admin config for vagrant user
+      ansible.builtin.copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/vagrant/.kube/config
+        remote_src: yes
+        owner: vagrant
+        group: vagrant
+        mode: 0644
       become: yes
-      ansible.builtin.command: kubeadm token create --print-join-command
-      register: join_command
-      delegate_to: "{{ groups['masters'][0] }}"
-      run_once: yes
 
-- name: Set up Kubernetes worker nodes
-  hosts: workers
-  become: yes
-
-  tasks:
-
-    - name: Join Kubernetes cluster
-      ansible.builtin.command: "{{ hostvars[groups['masters'][0]]['join_command']['stdout'] }}"
-      args:
-        warn: no
-        creates: /etc/kubernetes/kubelet.conf
-  
+    - name: Install Flannel networking
+      become: yes
+      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+     
