@@ -94,13 +94,24 @@
       args:
         creates: /etc/kubernetes/admin.conf
 
-    - name: Create .kube directory for vagrant user
+    - name: Create .kube directory for root user
       file:
-        path: /home/vagrant/.kube
+        path: /root/.kube
         state: directory
-        owner: vagrant
-        group: vagrant
+        owner: root
+        group: root
         mode: 0755
+
+    - name: Copy Kubernetes admin config for root user
+      ansible.builtin.copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: yes
+        owner: root
+        group: root
+        mode: 0644
+      become: yes
+
 
     - name: Copy Kubernetes admin config for vagrant user
       ansible.builtin.copy:
