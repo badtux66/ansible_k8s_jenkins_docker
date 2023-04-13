@@ -1,6 +1,6 @@
 ---
-- name: Run Jenkins as a Docker container
-  hosts: jenkins_server
+- name: Run Jenkins as a Docker container with Maven
+  hosts: jenkins
   become: yes
   tasks:
     - name: Update apt repositories
@@ -64,16 +64,33 @@
       community.docker.docker_network:
         name: jenkins_network
 
-    - name: Pull Jenkins Docker image
-      community.docker.docker_image:
-        name: jenkins/jenkins:lts
-        source: pull
-        state: present
+    - name: Create custom Jenkins Dockerfile
+      copy:
+        content: |
+          FROM jenkins/jenkins:lts
 
-    - name: Run Jenkins Docker container
+          USER root
+
+          RUN apt-get update && \
+              apt-get install -y sudo maven && \
+              echo 'jenkins ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers && \
+              rm -rf /var/lib/apt/lists/*
+
+          USER jenkins
+        dest: /tmp/my-jenkins.dockerfile
+
+    - name: Build custom Jenkins Docker image
+      community.docker.docker_image:
+        name: my-jenkins:lts
+        build:
+          path: /tmp
+          dockerfile: /tmp/my-jenkins.dockerfile
+        source: build
+
+    - name: Run Jenkins Docker container with custom image
       community.docker.docker_container:
         name: jenkins
-        image: jenkins/jenkins:lts
+        image: my-jenkins:lts
         state: started
         restart_policy: always
         ports:

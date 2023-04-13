@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = 'your-dockerhub-credentials-id'
-        DOCKERHUB_REPO = 'your-dockerhub-username/todo-app'
+        DOCKERHUB_CREDENTIALS = '42b13b74-6647-49ac-a6e6-21db77fffae4'
+        DOCKERHUB_REPO = 'edipoz/todo-app'
     }
 
     stages {
@@ -38,7 +38,7 @@ pipeline {
                 script {
                     kubernetesDeploy(
                         configs: 'k8s-deployment.yaml',
-                        kubeconfigId: 'your-kubeconfig-credentials-id',
+                        kubeconfigId: '277655e8-6aa3-4170-81fd-3b6fa60cf49c',
                         enableConfigSubstitution: true
                     )
                 }
