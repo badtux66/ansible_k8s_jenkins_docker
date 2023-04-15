@@ -25,7 +25,7 @@ else:
 with open("Vagrantfile", "r") as f:
     file_contents = f.read()
 file_contents = file_contents.replace('$network_interface = "1: lo"', f'$network_interface = "{network_interface}"')
-file_contents = file_contents.replace('bridge: $network_interface', f'bridge: "{network}"')
+file_contents = file_contents.replace('bridge: "$network_interface"', f'bridge: "{network}"')
 with open("Vagrantfile", "w") as f:
     f.write(file_contents)
 
