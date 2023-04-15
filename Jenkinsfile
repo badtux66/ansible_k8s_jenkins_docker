@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = '42b13b74-6647-49ac-a6e6-21db77fffae4'
+        DOCKERHUB_CREDENTIALS = 'a32cc0d9-1566-4a3f-b393-e47009698e52'
         DOCKERHUB_REPO = 'edipoz/todo-app'
     }
 
@@ -38,7 +38,7 @@ pipeline {
                 script {
                     kubernetesDeploy(
                         configs: 'k8s-deployment.yaml',
-                        kubeconfigId: '277655e8-6aa3-4170-81fd-3b6fa60cf49c',
+                        kubeconfigId: '060fc020-b1e1-493c-957e-3005aa75bfe7',
                         enableConfigSubstitution: true
                     )
                 }

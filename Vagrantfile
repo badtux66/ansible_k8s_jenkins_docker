@@ -1,5 +1,5 @@
 
-$network_interface = "wlan0"
+$network_interface = "00"
 
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |v|
