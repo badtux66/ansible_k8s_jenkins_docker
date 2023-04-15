@@ -1,5 +1,0 @@
-ansible ansible_ssh_host=127.0.0.1 ansible_ssh_user=erkut ansible_ssh_pass=erkut+2023
-jenkins ansible_ssh_host=127.0.0.2 ansible_ssh_user=erkut ansible_ssh_pass=erkut+2023
-k8s ansible_ssh_host=127.0.0.3 ansible_ssh_user=erkut ansible_ssh_pass=erkut+2023
-
-
