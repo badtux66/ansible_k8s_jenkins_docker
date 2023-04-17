@@ -34,9 +34,9 @@ base_ip = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}."
 with open("Vagrantfile", "r") as f:
     file_contents = f.read()
 
-file_contents = file_contents.replace('ip: "192.168.137.4"', f'ip: "{base_ip}2"')
-file_contents = file_contents.replace('ip: "192.168.137.4"', f'ip: "{base_ip}3"')
-file_contents = file_contents.replace('ip: "192.168.137.4"', f'ip: "{base_ip}5"')
+file_contents = file_contents.replace('ip: "192.168.137.2"', f'ip: "{base_ip}2"')
+file_contents = file_contents.replace('ip: "192.168.137.3"', f'ip: "{base_ip}3"')
+file_contents = file_contents.replace('ip: "192.168.137.5"', f'ip: "{base_ip}5"')
 
 with open("Vagrantfile", "w") as f:
     f.write(file_contents)

@@ -17,10 +17,13 @@ pipeline {
             steps {
                 script {
                     def mvnHome = tool 'Maven'
-                    sh "${mvnHome}/bin/mvn clean package"
+                    withEnv(["PATH+MAVEN=${mvnHome}/bin"]) {
+                        sh 'mvn clean package'
+                    }
                 }
             }
         }
+
 
         stage('Docker build and push') {
             steps {

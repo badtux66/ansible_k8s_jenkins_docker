@@ -31,7 +31,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "jenkins" do |jenkins|
     jenkins.vm.box = "generic/ubuntu2004"
     jenkins.vm.hostname = "jenkins"
-    jenkins.vm.network "public_network", bridge: $network_interface, ip: "192.168.137.2", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
+    jenkins.vm.network "public_network", bridge: $network_interface, ip: "192.168.137.3", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
     jenkins.vm.synced_folder "/home/badtux/Desktop/ansible_k8s_jenkins_docker", "/vagrant", type: "rsync", rsync__exclude: ".git/"
 
     jenkins.vm.provision "shell", inline: <<-SHELL
@@ -49,7 +49,7 @@ Vagrant.configure("2") do |config|
   config.vm.define "k8s" do |k8s|
     k8s.vm.box = "generic/ubuntu2004"
     k8s.vm.hostname = "k8s"
-    k8s.vm.network "public_network", bridge: $network_interface, ip: "192.168.137.2", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
+    k8s.vm.network "public_network", bridge: $network_interface, ip: "192.168.137.5", netmask: "255.255.255.0", use_dhcp_assigned_default_route: true
     k8s.vm.synced_folder "/home/badtux/Desktop/ansible_k8s_jenkins_docker", "/vagrant", type: "rsync", rsync__exclude: ".git/"
 
     k8s.vm.provision "shell", inline: <<-SHELL
