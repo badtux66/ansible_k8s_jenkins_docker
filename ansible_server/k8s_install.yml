@@ -1,78 +1,166 @@
----
-  - name: Setup Kubernetes
-  hosts: k8s
-  become: yes
-  become_user: root
-  become_method: sudo
-  gather_facts: yes
-  vars:
-    ansible_become_pass: erkut+2023
+  - name: setup kubernetes
+    hosts: k8s
+    become: yes
+    become_user: root
+    become_method: sudo
+    gather_facts: yes
+    vars:
+      ansible_become_pass: erkut+2023
+      
+    tasks:
+      - name: fail if OS is not Ubuntu 20.04
+        fail:
+          msg: "OS should be Ubuntu 20.04, not {{ ansible_distribution }} {{ ansible_distribution_version }}"
+        when: ansible_distribution != 'Ubuntu' or ansible_distribution_version != '20.04'
 
-  tasks:
-     - name: Create containerd config file
-       file:
-         path: "/etc/modules-load.d/containerd.conf"
-         state: "touch"
+      - name: update APT packages
+        apt:
+          update_cache: yes
 
-     - name: Add conf for containerd
-       blockinfile:
-         path: "/etc/modules-load.d/containerd.conf"
-         block: |
-               overlay
-               br_netfilter
+      - name: reboot and wait for reboot to complete
+        reboot:
 
-     - name: modprobe
-       shell: |
-               sudo modprobe overlay
-               sudo modprobe br_netfilter
+      - name: disable SWAP (Kubeadm requirement)
+        shell: |
+          swapoff -a
+      - name: disable SWAP in fstab (Kubeadm requirement)
+        replace:
+          path: /etc/fstab
+          regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+          replace: '# \1'
 
+      - name: create an empty file for the Containerd module
+        copy:
+          content: ""
+          dest: /etc/modules-load.d/containerd.conf
+          force: no
 
-     - name: Set system configurations for Kubernetes networking
-       file:
-         path: "/etc/sysctl.d/99-kubernetes-cri.conf"
-         state: "touch"
+      - name: configure modules for Containerd
+        blockinfile:
+          path: /etc/modules-load.d/containerd.conf
+          block: |
+              overlay
+              br_netfilter
+      - name: create an empty file for Kubernetes sysctl params
+        copy:
+          content: ""
+          dest: /etc/sysctl.d/99-kubernetes-cri.conf
+          force: no
 
-     - name: Add conf for containerd
-       blockinfile:
-         path: "/etc/sysctl.d/99-kubernetes-cri.conf"
-         block: |
-                net.bridge.bridge-nf-call-iptables = 1
-                net.ipv4.ip_forward = 1
-                net.bridge.bridge-nf-call-ip6tables = 1
+      - name: configure sysctl params for Kubernetes
+        lineinfile:
+          path: /etc/sysctl.d/99-kubernetes-cri.conf
+          line: "{{ item }}"
+        with_items:
+          - 'net.bridge.bridge-nf-call-iptables  = 1'
+          - 'net.ipv4.ip_forward                 = 1'
+          - 'net.bridge.bridge-nf-call-ip6tables = 1'
 
-     - name: Apply new settings
-       command: sudo sysctl --system
+      - name: apply sysctl params without reboot
+        command: sysctl --system
 
-     - name: install containerd
-       shell: |
-               sudo apt-get update && sudo apt-get install -y containerd
-               sudo mkdir -p /etc/containerd
-               sudo containerd config default | sudo tee /etc/containerd/config.toml
-               sudo systemctl restart containerd
+      - name: install APT Transport HTTPS
+        apt:
+          name: apt-transport-https
+          state: present
 
-     - name: disable swap
-       shell: |
-               sudo swapoff -a
-               sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+      - name: add Docker apt-key
+        apt_key:
+          url: https://download.docker.com/linux/ubuntu/gpg
+          state: present
 
-     - name: install and configure dependencies
-       shell: |
-               sudo apt-get update && sudo apt-get install -y apt-transport-https curl
-               curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+      - name: add Docker's APT repository
+        apt_repository:
+          repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+          filename: "docker-{{ ansible_distribution_release }}"
 
-     - name: Create kubernetes repo file
-       file:
-         path: "/etc/apt/sources.list.d/kubernetes.list"
-         state: "touch"
+      - name: add Kubernetes apt-key
+        apt_key:
+          url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+          state: present
 
-     - name: Add K8s Source
-       blockinfile:
-         path: "/etc/apt/sources.list.d/kubernetes.list"
-         block: |
-               deb https://apt.kubernetes.io/ kubernetes-xenial main
+      - name: add Kubernetes' APT repository
+        apt_repository:
+          repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+          state: present
+          filename: 'kubernetes'
 
-     - name: install kubernetes
-       shell: |
-               sudo apt-get update
-               sudo apt-get install -y kubelet=1.20.1-00 kubeadm=1.20.1-00 kubectl=1.20.1-00
-               sudo apt-mark hold kubelet kubeadm kubectl
+      - name: install Containerd
+        apt:
+          name: containerd.io
+          state: present
+
+      - name: create Containerd directory
+        file:
+          path: /etc/containerd
+          state: directory
+
+      - name: add Containerd configuration
+        shell: /usr/bin/containerd config default > /etc/containerd/config.toml
+
+      - name: configuring the systemd cgroup driver for Containerd
+        lineinfile:
+          path: /etc/containerd/config.toml
+          regexp: '            SystemdCgroup = false'
+          line: '            SystemdCgroup = true'
+
+      - name: enable the Containerd service and start it
+        systemd:
+          name: containerd
+          state: restarted
+          enabled: yes
+          daemon-reload: yes
+
+      - name: install Kubelet
+        apt:
+          name: kubelet=1.26.*
+          state: present
+          update_cache: true
+
+      - name: install Kubeadm
+        apt:
+          name: kubeadm=1.26.*
+          state: present
+
+      - name: enable the Kubelet service, and enable it persistently
+        service:
+          name: kubelet
+          enabled: yes
+
+      - name: load br_netfilter kernel module
+        modprobe:
+          name: br_netfilter
+          state: present
+
+      - name: set bridge-nf-call-iptables
+        sysctl:
+          name: net.bridge.bridge-nf-call-iptables
+          value: 1
+
+      - name: set ip_forward
+        sysctl:
+          name: net.ipv4.ip_forward
+          value: 1
+
+      - name: check Kubelet args in Kubelet config
+        shell: grep "^Environment=\"KUBELET_EXTRA_ARGS=" /etc/systemd/system/kubelet.service.d/10-kubeadm.conf || true
+        register: check_args
+
+      - name: add runtime args in Kubelet config
+        lineinfile:
+          dest: "/etc/systemd/system/kubelet.service.d/10-kubeadm.conf"
+          line: "Environment=\"KUBELET_EXTRA_ARGS= --runtime-cgroups=/system.slice/containerd.service --container-runtime-endpoint=unix:///run/containerd/containerd.sock\""
+          insertafter: '\[Service\]'
+        when: check_args.stdout == ""
+
+      - name: reboot and wait for reboot to complete
+        reboot:
+
+  - hosts: master
+    become: yes
+    tasks:
+      - name: install Kubectl
+        apt:
+          name: kubectl=1.26.*
+          state: present
+          force: yes # allow downgrades
