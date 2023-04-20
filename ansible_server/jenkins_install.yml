@@ -1,102 +1,39 @@
 ---
-- name: Run Jenkins as a Docker container with Maven
+- name: Install Java and Jenkins on Ubuntu
   hosts: jenkins
   become: yes
+  become_user: root
+  become_method: sudo
+  gather_facts: yes
+  vars:
+    ansible_become_pass: erkut+2023
+    
   tasks:
-    - name: Update apt repositories
+    - name: Update apt cache
       apt:
         update_cache: yes
-        cache_valid_time: 3600
 
-    - name: Install required packages for Docker
+    - name: Install Java
       apt:
-        name: "{{ item }}"
+        name: openjdk-11-jre
         state: present
-      loop:
-        - apt-transport-https
-        - ca-certificates
-        - curl
-        - gnupg
-        - lsb-release
-        - python3-pip
-
-    - name: Add Docker GPG key
-      ansible.builtin.apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
-
-    - name: Add Docker repository
-      ansible.builtin.apt_repository:
-        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        state: present
-
-    - name: Install Docker
+   
+    - name: Install Maven
       apt:
-        name: docker-ce
+        name: maven
         state: present
 
-    - name: Start and enable Docker service
-      systemd:
-        name: docker
-        state: started
-        enabled: yes
+    - name: Add Jenkins repository key
+      shell: curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | sudo tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
 
-    - name: Install Docker SDK for Python
-      ansible.builtin.pip:
-        name: docker
-        state: present
+    - name: Add Jenkins repository to apt sources
+      shell: echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
 
-    - name: Create /var/jenkins_home directory
-      file:
-        path: /var/jenkins_home
-        state: directory
-        mode: 0755
+    - name: Update apt cache
+      apt:
+        update_cache: yes
 
-    - name: Change ownership of /var/jenkins_home to Jenkins user
-      file:
-        path: /var/jenkins_home
-        owner: 1000
-        group: 1000
-        state: directory
-        recurse: yes
-
-    - name: Create Docker network
-      community.docker.docker_network:
-        name: jenkins_network
-
-    - name: Create custom Jenkins Dockerfile
-      copy:
-        content: |
-          FROM jenkins/jenkins:lts
-
-          USER root
-
-          RUN apt-get update && \
-              apt-get install -y sudo maven && \
-              echo 'jenkins ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers && \
-              rm -rf /var/lib/apt/lists/*
-
-          USER jenkins
-        dest: /tmp/my-jenkins.dockerfile
-
-    - name: Build custom Jenkins Docker image
-      community.docker.docker_image:
-        name: my-jenkins:lts
-        build:
-          path: /tmp
-          dockerfile: /tmp/my-jenkins.dockerfile
-        source: build
-
-    - name: Run Jenkins Docker container with custom image
-      community.docker.docker_container:
+    - name: Install Jenkins
+      apt:
         name: jenkins
-        image: my-jenkins:lts
-        state: started
-        restart_policy: always
-        ports:
-          - "8080:8080"
-          - "50000:50000"
-        volumes:
-          - /var/jenkins_home:/var/jenkins_home
-        networks:
-          - name: jenkins_network
+        state: latest

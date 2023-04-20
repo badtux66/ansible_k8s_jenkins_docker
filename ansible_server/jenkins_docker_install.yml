@@ -1,0 +1,102 @@
+---
+- name: Run Jenkins as a Docker container with Maven
+  hosts: jenkins
+  become: yes
+  tasks:
+    - name: Update apt repositories
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages for Docker
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg
+        - lsb-release
+        - python3-pip
+
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker
+      apt:
+        name: docker-ce
+        state: present
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install Docker SDK for Python
+      ansible.builtin.pip:
+        name: docker
+        state: present
+
+    - name: Create /var/jenkins_home directory
+      file:
+        path: /var/jenkins_home
+        state: directory
+        mode: 0755
+
+    - name: Change ownership of /var/jenkins_home to Jenkins user
+      file:
+        path: /var/jenkins_home
+        owner: 1000
+        group: 1000
+        state: directory
+        recurse: yes
+
+    - name: Create Docker network
+      community.docker.docker_network:
+        name: jenkins_network
+
+    - name: Create custom Jenkins Dockerfile
+      copy:
+        content: |
+          FROM jenkins/jenkins:lts
+
+          USER root
+
+          RUN apt-get update && \
+              apt-get install -y sudo maven && \
+              echo 'jenkins ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers && \
+              rm -rf /var/lib/apt/lists/*
+
+          USER jenkins
+        dest: /tmp/my-jenkins.dockerfile
+
+    - name: Build custom Jenkins Docker image
+      community.docker.docker_image:
+        name: my-jenkins:lts
+        build:
+          path: /tmp
+          dockerfile: /tmp/my-jenkins.dockerfile
+        source: build
+
+    - name: Run Jenkins Docker container with custom image
+      community.docker.docker_container:
+        name: jenkins
+        image: my-jenkins:lts
+        state: started
+        restart_policy: always
+        ports:
+          - "8080:8080"
+          - "50000:50000"
+        volumes:
+          - /var/jenkins_home:/var/jenkins_home
+        networks:
+          - name: jenkins_network
