@@ -1,12 +1,25 @@
 import os
+import re
 import subprocess
 
 # Function to get default network interface
 def get_default_interface():
     route_output = subprocess.check_output(["ip", "route"]).decode("utf-8")
+    default_interface = None
     for line in route_output.split("\n"):
         if "default" in line:
-            return line.split()[4]
+            default_interface = line.split()[4]
+            break
+
+    if default_interface is None:
+        return None
+
+    # Check if the default interface has a global IPv4 address
+    addr_output = subprocess.check_output(["ip", "addr", "show", default_interface]).decode("utf-8")
+    for line in addr_output.split("\n"):
+        if "inet " in line and not "scope link" in line:
+            return default_interface
+
     return None
 
 # Get default network interface and IP address
@@ -34,21 +47,19 @@ base_ip = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}."
 with open("Vagrantfile", "r") as f:
     file_contents = f.read()
 
-file_contents = file_contents.replace('ip: "192.168.137.2"', f'ip: "{base_ip}2"')
-file_contents = file_contents.replace('ip: "192.168.137.3"', f'ip: "{base_ip}3"')
-file_contents = file_contents.replace('ip: "192.168.137.5"', f'ip: "{base_ip}5"')
+ip_pattern = re.compile(r'ip: "(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"')
+file_contents = ip_pattern.sub(lambda match: f'ip: "{base_ip}{match.group(1).split(".")[-1]}"', file_contents)
 
 with open("Vagrantfile", "w") as f:
     f.write(file_contents)
 
 # Update inventory file
-inventory_file_path = "ansible_server/inventory.txt"
+inventory_file_path = "inventory.txt"  # Modify this line to the correct location of your inventory.txt file
 with open(inventory_file_path, "r") as f:
     file_contents = f.read()
 
-updated_file_contents = file_contents.replace("ansible_ssh_host=192.168.174.2", f"ansible_ssh_host={base_ip}2")
-updated_file_contents = updated_file_contents.replace("ansible_ssh_host=192.168.174.3", f"ansible_ssh_host={base_ip}3")
-updated_file_contents = updated_file_contents.replace("ansible_ssh_host=192.168.174.5", f"ansible_ssh_host={base_ip}5")
+inventory_pattern = re.compile(r"ansible_ssh_host=(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})")
+updated_file_contents = inventory_pattern.sub(lambda match: f"ansible_ssh_host={base_ip}{match.group(1).split('.')[-1]}", file_contents)
 
 with open(inventory_file_path, "w") as f:
     f.write(updated_file_contents)
