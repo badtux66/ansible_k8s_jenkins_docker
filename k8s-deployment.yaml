@@ -1,26 +1,67 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: todo-deployment
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
-      app: todo-app
+      app: todo
   template:
     metadata:
       labels:
-        app: todo-app
+        app: todo
     spec:
+      tolerations:
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
-        - name: todo-app
-          image: edipoz/todo-app:${BUILD_NUMBER}
-          ports:
-            - containerPort: 8080
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "250m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
+      - name: todo-app
+        image: edipoz/todo-app:${BUILD_NUMBER}
+        ports:
+        - containerPort: 8080
+        env:
+        - name: BUILD_NUMBER
+          valueFrom:
+            configMapKeyRef:
+              name: my-config
+              key: BUILD_NUMBER
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-app-service
+spec:
+  selector:
+    app: todo
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 8080
+  type: LoadBalancer
+  loadBalancerIP: 192.168.226.5
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: todo-ingress
+spec:
+  rules:
+    - host: todo.erkut.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: todo-app-service
+                port:
+                  number: 443
+  tls:
+    - hosts:
+        - todo.erkut.local
+      secretName: todo-tls-secret
